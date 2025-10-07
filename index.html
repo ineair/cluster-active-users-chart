@@ -1,0 +1,200 @@
+<!--
+cluster-active-users-chart.html
+説明:
+ - GitHub上の data.json を直接取得して折れ線グラフを表示します。
+ - 下記の URL を自分のリポジトリに合わせて書き換えてください。
+期待する data.json 形式 (例):
+[
+  { "time": "2025-10-01T00:00:00Z", "value": 120 },
+  { "time": "2025-10-01T01:00:00Z", "value": 140 }
+]
+-->
+
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cluster アクティブユーザー推移</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --muted:#9aa4b2;
+      --accent-start:#6ee7b7;
+      --accent-end:#60a5fa;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: linear-gradient(180deg,#071025 0%, #071733 45%, #071025 100%);
+      color:#e6eef8;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .container{width:100%;max-width:1100px;}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:16px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(6px);}
+    .header{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:14px;}
+    .title{display:flex;gap:12px;align-items:center;}
+    .badge{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,var(--accent-start),var(--accent-end));display:flex;align-items:center;justify-content:center;font-weight:700;color:#04263b;box-shadow:0 6px 18px rgba(96,165,250,0.14);}
+    h1{font-size:18px;margin:0}
+    p.subtitle{margin:0;color:var(--muted);font-size:13px}
+    .controls{display:flex;gap:10px;align-items:center}
+    .control{background:var(--glass);padding:8px;border-radius:10px;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+    .control select, .control input{background:transparent;border:0;color:inherit;outline:none}
+    canvas{width:100%!important;height:380px!important}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:var(--muted);font-size:13px}
+    button.btn{background:linear-gradient(90deg,var(--accent-start),var(--accent-end));color:#04263b;border:0;padding:8px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="title">
+          <div class="badge">C</div>
+          <div>
+            <h1>Cluster アクティブユーザー推移</h1>
+            <p class="subtitle">GitHub上の data.json からモダンな折れ線グラフを表示します</p>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="control">
+            表示範囲
+            <select id="rangeSelect">
+              <option value="all">全期間</option>
+              <option value="30d">過去30日</option>
+              <option value="7d">過去7日</option>
+              <option value="24h">過去24時間</option>
+            </select>
+          </div>
+          <div class="control">
+            平滑化
+            <input type="checkbox" id="smoothToggle" />
+          </div>
+          <button class="btn" id="exportBtn">PNGをダウンロード</button>
+        </div>
+      </div>
+
+      <canvas id="chart"></canvas>
+
+      <div class="footer">
+        <div id="summary">読み込み中...</div>
+        <div>更新: <span id="updatedAt">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GITHUB_JSON_URL = 'https://raw.githubusercontent.com/inea-cluster/active-users/main/data.json'; // 固定GitHub URL
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    let originalData = [];
+    let chart;
+
+    function formatNumber(n){ return n.toLocaleString(); }
+    function parseData(raw){
+      return raw.map(d=>({ t: new Date(d.time), y: Number(d.value) }))
+                .filter(d=>!isNaN(d.y) && d.t.toString()!=='Invalid Date')
+                .sort((a,b)=>a.t - b.t);
+    }
+
+    function buildGradient(ctx, area){
+      const g = ctx.createLinearGradient(0,0,0,area.bottom);
+      g.addColorStop(0,'rgba(96,165,250,0.28)');
+      g.addColorStop(1,'rgba(96,165,250,0.02)');
+      return g;
+    }
+
+    function createChart(data){
+      const labels = data.map(d=>d.t);
+      const values = data.map(d=>d.y);
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type:'line',
+        data:{labels,datasets:[{
+          label:'アクティブユーザー',
+          data:values,
+          tension:document.getElementById('smoothToggle').checked?0.4:0.0,
+          borderWidth:2.5,
+          pointRadius:0,
+          fill:true,
+          borderColor:function(context){
+            const grad=context.chart.ctx.createLinearGradient(0,0,context.chart.width,0);
+            grad.addColorStop(0,'#6ee7b7');
+            grad.addColorStop(1,'#60a5fa');
+            return grad;
+          },
+          backgroundColor:(context)=>buildGradient(context.chart.ctx,context.chart.chartArea)
+        }]},
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          interaction:{mode:'index',intersect:false},
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>` ${formatNumber(ctx.parsed.y)} users`}}},
+          scales:{
+            x:{type:'time',time:{tooltipFormat:'YYYY-MM-DD HH:mm',displayFormats:{hour:'MM/DD HH:mm',day:'MM/DD'}},ticks:{color:'#bcd3ee'},grid:{color:'rgba(255,255,255,0.04)'}},
+            y:{ticks:{color:'#bcd3ee',beginAtZero:true},grid:{color:'rgba(255,255,255,0.03)'}}
+          }
+        }
+      });
+    }
+
+    async function loadData(){
+      try{
+        const res = await fetch(GITHUB_JSON_URL,{cache:'no-store'});
+        if(!res.ok) throw new Error('data.json を取得できませんでした: '+res.status);
+        const raw = await res.json();
+        originalData = parseData(raw);
+        document.getElementById('updatedAt').textContent = new Date().toLocaleString();
+        updateView();
+      }catch(err){
+        document.getElementById('summary').textContent = '読み込みエラー: ' + err.message;
+        console.error(err);
+      }
+    }
+
+    function filterRange(arr,key){
+      if(key==='all') return arr;
+      const now=Date.now();
+      let ms=0;
+      if(key==='24h') ms=24*60*60*1000;
+      if(key==='7d') ms=7*24*60*60*1000;
+      if(key==='30d') ms=30*24*60*60*1000;
+      return arr.filter(d=>(now-d.t.getTime())<=ms);
+    }
+
+    function updateView(){
+      const range=document.getElementById('rangeSelect').value;
+      const filtered=filterRange(originalData,range);
+      if(filtered.length===0){
+        document.getElementById('summary').textContent='データがありません。data.json の形式を確認してください。';
+        if(chart) chart.destroy();
+        return;
+      }
+      createChart(filtered);
+      const last=filtered[filtered.length-1];
+      const avg=Math.round(filtered.reduce((s,d)=>s+d.y,0)/filtered.length);
+      document.getElementById('summary').textContent=`最新: ${last.t.toLocaleString()} — 現在値 ${formatNumber(last.y)} — 平均 ${formatNumber(avg)}`;
+    }
+
+    document.getElementById('rangeSelect').addEventListener('change',updateView);
+    document.getElementById('smoothToggle').addEventListener('change',updateView);
+    document.getElementById('exportBtn').addEventListener('click',()=>{
+      if(!chart) return;
+      const a=document.createElement('a');
+      a.href=chart.toBase64Image();
+      a.download=`cluster-active-users-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
+      a.click();
+    });
+
+    loadData();
+    setInterval(loadData,30000);
+  </script>
+</body>
+</html>
