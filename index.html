@@ -9,14 +9,18 @@ cluster-active-users-chart.html
   { "time": "2025-10-01T01:00:00Z", "value": 140 }
 ]
 -->
-
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cluster アクティブユーザー推移</title>
+
+  <!-- ✅ Chart.js本体 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <!-- ✅ 日付アダプター（これが重要） -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+
   <style>
     :root{
       --bg:#0f1724;
@@ -138,8 +142,16 @@ cluster-active-users-chart.html
           interaction:{mode:'index',intersect:false},
           plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>` ${formatNumber(ctx.parsed.y)} users`}}},
           scales:{
-            x:{type:'time',time:{tooltipFormat:'YYYY-MM-DD HH:mm',displayFormats:{hour:'MM/DD HH:mm',day:'MM/DD'}},ticks:{color:'#bcd3ee'},grid:{color:'rgba(255,255,255,0.04)'}},
-            y:{ticks:{color:'#bcd3ee',beginAtZero:true},grid:{color:'rgba(255,255,255,0.03)'}}
+            x:{
+              type:'time', // ✅ 日付軸を有効に
+              time:{tooltipFormat:'yyyy-MM-dd HH:mm',displayFormats:{hour:'MM/dd HH:mm',day:'MM/dd'}},
+              ticks:{color:'#bcd3ee'},
+              grid:{color:'rgba(255,255,255,0.04)'}
+            },
+            y:{
+              ticks:{color:'#bcd3ee',beginAtZero:true},
+              grid:{color:'rgba(255,255,255,0.03)'}
+            }
           }
         }
       });
