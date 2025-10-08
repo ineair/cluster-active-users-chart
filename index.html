@@ -1,127 +1,126 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cluster アクティブユーザー推移</title>
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- 日付用アダプター + 日本語ロケール -->
-  <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/date-fns/locale/ja/index.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
-
-  <style>
-    body {
-      font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-    }
-    h1 {
-      font-size: 1.8rem;
-      margin-bottom: 1rem;
-      color: #38bdf8;
-    }
-    .chart-container {
-      width: 90%;
-      max-width: 700px;
-      background: #1e293b;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster オンラインスペース ユーザー数</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* モダンなデザインのためのスタイル */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .chart-container {
+            position: relative;
+            width: 90vw;
+            max-width: 900px;
+            padding: 25px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        }
+    </style>
 </head>
 <body>
-  <h1>Cluster アクティブユーザー推移</h1>
-  <div class="chart-container">
-    <canvas id="userChart"></canvas>
-  </div>
+    <div class="chart-container">
+        <canvas id="userChart"></canvas>
+    </div>
 
-  <script>
-    // GitHubの生データURL（例: 自分のリポジトリに置いたdata.json）
-    const dataUrl = "https://raw.githubusercontent.com/ineair/cluster-active-users-chart/refs/heads/main/data.json";
+    <script>
+        // data.jsonを非同期で読み込む
+        async function drawChart() {
+            try {
+                const response = await fetch('data.json');
+                const data = await response.json();
 
-    async function loadData() {
-      const response = await fetch(dataUrl);
-      const data = await response.json();
+                // データをグラフ用に整形
+                const labels = data.map(item => {
+                    // UTC時刻を日本時間 (JST) に変換してフォーマット
+                    const date = new Date(item.time);
+                    const month = date.getMonth() + 1;
+                    const day = date.getDate();
+                    // JSTはUTC+9時間
+                    return `${month}/${day}`;
+                });
 
-      createChart(data);
-    }
+                const values = data.map(item => item.value);
 
-    function createChart(data) {
-      const ctx = document.getElementById("userChart");
+                // グラフの描画
+                const ctx = document.getElementById('userChart').getContext('2d');
 
-      // 既にチャートがある場合は破棄（Canvas再利用エラー防止）
-      if (window.userChart) {
-        window.userChart.destroy();
-      }
+                // 線の下を塗りつぶすためのグラデーションを作成
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(0, 123, 255, 0.5)');
+                gradient.addColorStop(1, 'rgba(0, 123, 255, 0)');
 
-      window.userChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: data.map(d => new Date(d.time)),
-          datasets: [{
-            label: "アクティブユーザー数",
-            data: data.map(d => d.value),
-            borderColor: "#38bdf8",
-            backgroundColor: "rgba(56, 189, 248, 0.2)",
-            fill: true,
-            tension: 0.3,
-            pointRadius: 4,
-            pointHoverRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            x: {
-              type: "time",
-              adapters: {
-                date: {
-                  locale: dateFns.locale.ja // 日本語ロケール
-                }
-              },
-              time: {
-                unit: "day",
-                tooltipFormat: "MM月dd日 HH:mm",
-                displayFormats: {
-                  day: "MM月dd日"
-                }
-              },
-              ticks: { color: "#94a3b8" },
-              grid: { color: "rgba(255,255,255,0.05)" }
-            },
-            y: {
-              ticks: { color: "#94a3b8" },
-              grid: { color: "rgba(255,255,255,0.05)" }
+                new Chart(ctx, {
+                    type: 'line', // 折れ線グラフ
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'オンラインユーザー数',
+                            data: values,
+                            borderColor: '#007bff',
+                            backgroundColor: gradient,
+                            borderWidth: 3,
+                            fill: true, // 線の下を塗りつぶす
+                            tension: 0.4, // 曲線を滑らかにする
+                            pointBackgroundColor: '#007bff',
+                            pointRadius: 5,
+                            pointHoverRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'オンラインスペースのユーザー数推移',
+                                font: { size: 22, weight: 'bold' },
+                                padding: { top: 10, bottom: 25 }
+                            },
+                            legend: {
+                                display: false // データが1種類なので凡例は非表示
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'ユーザー数 (人)',
+                                    font: { size: 14 }
+                                },
+                                grid: {
+                                    color: '#e9ecef'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '日付 (日本時間)',
+                                    font: { size: 14 }
+                                },
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('グラフデータの読み込みに失敗しました:', error);
             }
-          },
-          plugins: {
-            legend: {
-              labels: { color: "#e2e8f0" }
-            },
-            tooltip: {
-              backgroundColor: "#1e293b",
-              titleColor: "#38bdf8",
-              bodyColor: "#e2e8f0",
-              borderWidth: 1,
-              borderColor: "#38bdf8"
-            }
-          }
         }
-      });
-    }
 
-    loadData();
-  </script>
+        drawChart();
+    </script>
 </body>
 </html>
