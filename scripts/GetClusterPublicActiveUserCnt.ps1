@@ -9,7 +9,7 @@ $url1 = "https://api.cluster.mu/v1/live_activity/spaces/hots"
 $url2 = "https://api.cluster.mu/v1/events/in_session?pageSize=100"
 $url3 = "https://api.cluster.mu/v1/events/"
 $deleteAfterDays = 90
-$dataFile = Join-Path $PSScriptRoot "data.json"
+$dataFile = Join-Path $PSScriptRoot "..\data.json"
 
 # ヘッダー
 $headers = @{
