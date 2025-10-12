@@ -14,6 +14,8 @@ jobs:
       # 1. リポジトリをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # これで GITHUB_TOKEN が push に使われる
 
       # 2. PowerShellスクリプト実行
       - name: Run PowerShell script
