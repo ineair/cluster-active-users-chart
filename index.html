@@ -57,18 +57,15 @@
       background:var(--card);
       border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,0.03);
     }
-    .meta{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .meta{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
     .meta .stat{font-size:14px;color:var(--muted)}
-    .controls{margin-left:auto;display:flex;gap:8px}
+    .controls{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
     button.btn{
       background:var(--glass);border:1px solid rgba(255,255,255,0.03);padding:8px 12px;border-radius:10px;color:var(--muted);font-size:13px;cursor:pointer
     }
-    button.btn:active{transform:translateY(1px)}
+    button.btn.active{color:#fff;border-color:rgba(255,255,255,0.2)}
     canvas{width:100%!important;height:360px!important}
-
     footer{margin-top:12px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;align-items:center}
-    a.ghost{color:var(--muted);text-decoration:none}
-
     @media(max-width:600px){
       body{padding:16px}
       canvas{height:260px!important}
@@ -89,155 +86,131 @@
       <div class="meta">
         <div class="stat" id="range">読み込み中...</div>
         <div class="controls">
+          <button class="btn" id="btn-90">過去90日</button>
+          <button class="btn" id="btn-30">過去30日</button>
+          <button class="btn" id="btn-7">過去7日</button>
+          <button class="btn" id="btn-1">過去24時間</button>
           <button class="btn" id="reload">🔄 再読み込み</button>
-          <button class="btn" id="time-format">タイムフォーマット: 日本時間</button>
         </div>
-      </div>
-
-      <div style="margin-bottom:8px;">
-        <button class="btn" data-range="90">過去90日</button>
-        <button class="btn" data-range="30">過去30日</button>
-        <button class="btn" data-range="7">過去7日</button>
-        <button class="btn" data-range="1">過去24時間</button>
       </div>
 
       <canvas id="chart"></canvas>
 
       <footer>
         <div>データ: <span id="count">0</span> 点</div>
-        <div><a class="ghost" href="#">GitHub Pages にアップロードして公開してください</a></div>
       </footer>
     </div>
   </div>
 
-  <!-- Chart.js & Luxon -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
   <script>
     const { DateTime } = luxon;
-    let rawData = [];
-    let chart = null;
-    let currentRangeDays = 90;
+    let allData = [];
 
     async function fetchData() {
       try {
-        const res = await fetch('./data.json', {cache: 'no-store'});
+        const res = await fetch('./data.json', { cache: 'no-store' });
         if(!res.ok) throw new Error('data.json の読み込みに失敗しました: ' + res.status);
-        const json = await res.json();
-        rawData = json.slice(); // save globally
-        return json;
-      } catch (e) {
+        return await res.json();
+      } catch(e) {
         console.error(e);
-        alert('data.json の読み込みでエラーが発生しました。コンソールを確認してください。');
+        alert('data.json の読み込みでエラーが発生しました。');
         return [];
       }
     }
 
+    function toJapanTime(iso) {
+      return DateTime.fromISO(iso, { zone: 'utc' }).setZone('Asia/Tokyo');
+    }
+
     function toJapanTimeLabel(iso) {
-      const dt = DateTime.fromISO(iso, {zone:'utc'}).setZone('Asia/Tokyo');
-      return dt.toFormat("MM/dd HH:mm");
+      return toJapanTime(iso).toFormat("MM/dd HH:mm");
     }
 
-    function filterByRange(data, days){
-      if(days === 1){ // past 24h
-        const threshold = DateTime.now().minus({hours:24});
-        return data.filter(d => DateTime.fromISO(d.time, {zone:'utc'}) >= threshold);
-      } else {
-        const threshold = DateTime.now().minus({days:days});
-        return data.filter(d => DateTime.fromISO(d.time, {zone:'utc'}) >= threshold);
-      }
-    }
-
-    function getRangeText(data) {
-      if(!data.length) return '0 点';
-      const first = DateTime.fromISO(data[0].time, {zone:'utc'}).setZone('Asia/Tokyo');
-      const last = DateTime.fromISO(data[data.length-1].time, {zone:'utc'}).setZone('Asia/Tokyo');
-      return `${first.toFormat('yyyy/MM/dd HH:mm')} 〜 ${last.toFormat('yyyy/MM/dd HH:mm')}`;
+    function filterByDays(data, days) {
+      if (!days) return data;
+      const cutoff = DateTime.now().setZone('Asia/Tokyo').minus({ days });
+      return data.filter(d => toJapanTime(d.time) >= cutoff);
     }
 
     function buildDataset(data) {
       const sorted = data.slice().sort((a,b)=> new Date(a.time) - new Date(b.time));
-      const labels = sorted.map(d => toJapanTimeLabel(d.time));
-      const values = sorted.map(d => Number(d.value) || 0);
-      return { labels, values, count: values.length, sorted };
+      return {
+        labels: sorted.map(d => toJapanTimeLabel(d.time)),
+        values: sorted.map(d => Number(d.value) || 0),
+        count: sorted.length,
+        sorted
+      };
     }
+
+    function getRangeText(data) {
+      if(!data.length) return '0 点';
+      const first = toJapanTime(data[0].time);
+      const last = toJapanTime(data[data.length-1].time);
+      return `${first.toFormat('yyyy/MM/dd HH:mm')} 〜 ${last.toFormat('yyyy/MM/dd HH:mm')}`;
+    }
+
+    let chart = null;
 
     function renderChart(labels, values) {
       const ctx = document.getElementById('chart');
-
       if(chart) chart.destroy();
-
       const gradient = ctx.getContext('2d').createLinearGradient(0,0,0,400);
       gradient.addColorStop(0, 'rgba(96,165,250,0.28)');
       gradient.addColorStop(1, 'rgba(110,231,183,0.02)');
-
       chart = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'アクティブユーザー数',
-            data: values,
-            fill: true,
-            backgroundColor: gradient,
-            borderColor: 'rgba(96,165,250,0.95)',
-            tension: 0.28,
-            pointRadius: 4,
-            pointBackgroundColor: 'rgba(255,255,255,0.9)',
-            pointBorderWidth: 0,
-            pointHoverRadius:6,
-            borderWidth: 2
-          }]
-        },
+        data: { labels, datasets: [{
+          label: 'アクティブユーザー数',
+          data: values,
+          fill: true,
+          backgroundColor: gradient,
+          borderColor: 'rgba(96,165,250,0.95)',
+          tension: 0.28,
+          pointRadius: 4,
+          pointBackgroundColor: 'rgba(255,255,255,0.9)',
+          borderWidth: 2
+        }]},
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              mode: 'index',
-              intersect: false,
-              callbacks: {
-                label: (context) => `${context.parsed.y} 人`
-              }
-            }
-          },
+          plugins: { legend: { display: false } },
           scales: {
-            x: {
-              grid: { display: false },
-              ticks: { maxRotation: 0, autoSkip: true }
-            },
-            y: {
-              beginAtZero: true,
-              grid: { color: 'rgba(255,255,255,0.04)' },
-            }
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' } }
           }
         }
       });
     }
 
-    async function loadAndRender(){
-      const filtered = filterByRange(rawData, currentRangeDays);
+    async function loadAndRender(days=null) {
+      if (!allData.length) allData = await fetchData();
+      const filtered = filterByDays(allData, days);
       const { labels, values, count, sorted } = buildDataset(filtered);
       document.getElementById('count').textContent = count;
       document.getElementById('range').textContent = getRangeText(sorted);
       renderChart(labels, values);
     }
 
-    // reload button
-    document.getElementById('reload').addEventListener('click', ()=>{ loadAndRender(); });
+    document.getElementById('reload').addEventListener('click', ()=> loadAndRender());
 
-    // range buttons
-    document.querySelectorAll('.card button[data-range]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        currentRangeDays = Number(btn.dataset.range);
-        loadAndRender();
+    const btns = {
+      90: document.getElementById('btn-90'),
+      30: document.getElementById('btn-30'),
+      7: document.getElementById('btn-7'),
+      1: document.getElementById('btn-1'),
+    };
+
+    Object.entries(btns).forEach(([days, btn]) => {
+      btn.addEventListener('click', () => {
+        Object.values(btns).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadAndRender(Number(days));
       });
     });
 
-    // initial
-    fetchData().then(()=> loadAndRender());
+    loadAndRender();
   </script>
-
 </body>
 </html>
