@@ -1,25 +1,15 @@
-<!--
-File: index.html
-Description:
- - Modern, responsive single-page HTML that fetches data.json and draws a line chart of active users over time.
- - Uses Chart.js (v4) and Luxon for timezone-aware formatting.
- - Place this index.html and data.json in the same GitHub Pages repository (root) and publish.
-
-Also include the provided data.json (example) in the repository. Example data.json is shown after the HTML.
--->
-
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cluster — Online Space Active Users</title>
+  <title>cluster — パブリックアクティブユーザー数の推移</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     :root{
-      --bg:#0f1724; /* dark navy */
+      --bg:#0f1724;
       --card:#0b1320;
       --muted:#9aa4b2;
       --accent-start:#6ee7b7;
@@ -90,8 +80,8 @@ Also include the provided data.json (example) in the repository. Example data.js
     <header>
       <div class="logo">CL</div>
       <div>
-        <h1>Cluster — Online Space Active Users</h1>
-        <p class="lead">data.json のデータを読み込み、日本時間で折れ線グラフを描画します。</p>
+        <h1>cluster — パブリックアクティブユーザー数の推移</h1>
+        <p class="lead">clusterのパブリックスペースおよびパブリックイベントからユーザー数の推移をグラフに描画します。</p>
       </div>
     </header>
 
@@ -102,6 +92,13 @@ Also include the provided data.json (example) in the repository. Example data.js
           <button class="btn" id="reload">🔄 再読み込み</button>
           <button class="btn" id="time-format">タイムフォーマット: 日本時間</button>
         </div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <button class="btn" data-range="90">過去90日</button>
+        <button class="btn" data-range="30">過去30日</button>
+        <button class="btn" data-range="7">過去7日</button>
+        <button class="btn" data-range="1">過去24時間</button>
       </div>
 
       <canvas id="chart"></canvas>
@@ -118,12 +115,16 @@ Also include the provided data.json (example) in the repository. Example data.js
   <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
   <script>
     const { DateTime } = luxon;
+    let rawData = [];
+    let chart = null;
+    let currentRangeDays = 90;
 
     async function fetchData() {
       try {
         const res = await fetch('./data.json', {cache: 'no-store'});
         if(!res.ok) throw new Error('data.json の読み込みに失敗しました: ' + res.status);
         const json = await res.json();
+        rawData = json.slice(); // save globally
         return json;
       } catch (e) {
         console.error(e);
@@ -133,10 +134,18 @@ Also include the provided data.json (example) in the repository. Example data.js
     }
 
     function toJapanTimeLabel(iso) {
-      // parse as UTC then convert to Asia/Tokyo
       const dt = DateTime.fromISO(iso, {zone:'utc'}).setZone('Asia/Tokyo');
-      // format: 10/01 21:00
       return dt.toFormat("MM/dd HH:mm");
+    }
+
+    function filterByRange(data, days){
+      if(days === 1){ // past 24h
+        const threshold = DateTime.now().minus({hours:24});
+        return data.filter(d => DateTime.fromISO(d.time, {zone:'utc'}) >= threshold);
+      } else {
+        const threshold = DateTime.now().minus({days:days});
+        return data.filter(d => DateTime.fromISO(d.time, {zone:'utc'}) >= threshold);
+      }
     }
 
     function getRangeText(data) {
@@ -147,14 +156,11 @@ Also include the provided data.json (example) in the repository. Example data.js
     }
 
     function buildDataset(data) {
-      // assume data sorted by time; if not, sort
       const sorted = data.slice().sort((a,b)=> new Date(a.time) - new Date(b.time));
       const labels = sorted.map(d => toJapanTimeLabel(d.time));
       const values = sorted.map(d => Number(d.value) || 0);
       return { labels, values, count: values.length, sorted };
     }
-
-    let chart = null;
 
     function renderChart(labels, values) {
       const ctx = document.getElementById('chart');
@@ -211,17 +217,26 @@ Also include the provided data.json (example) in the repository. Example data.js
     }
 
     async function loadAndRender(){
-      const raw = await fetchData();
-      const { labels, values, count, sorted } = buildDataset(raw);
+      const filtered = filterByRange(rawData, currentRangeDays);
+      const { labels, values, count, sorted } = buildDataset(filtered);
       document.getElementById('count').textContent = count;
       document.getElementById('range').textContent = getRangeText(sorted);
       renderChart(labels, values);
     }
 
+    // reload button
     document.getElementById('reload').addEventListener('click', ()=>{ loadAndRender(); });
 
+    // range buttons
+    document.querySelectorAll('.card button[data-range]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        currentRangeDays = Number(btn.dataset.range);
+        loadAndRender();
+      });
+    });
+
     // initial
-    loadAndRender();
+    fetchData().then(()=> loadAndRender());
   </script>
 
 </body>
