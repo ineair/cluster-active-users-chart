@@ -38,3 +38,4 @@ jobs:
             git push origin main
           } else {
             Write-Host "No changes detected, skipping commit."
+          }
