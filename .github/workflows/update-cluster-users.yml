@@ -1,32 +1,40 @@
-name: Update Cluster Active Users
+name: Update Cluster Users
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # 30分ごと
-  workflow_dispatch:
+    # 15分ごとに実行
+    - cron: '*/15 * * * *'
+  workflow_dispatch:  # 手動実行も可能
 
 jobs:
-  update:
-    runs-on: ubuntu-latest
+  update-users:
+    runs-on: windows-latest
 
     steps:
+      # 1. リポジトリをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up jq
-        run: sudo apt-get install -y jq
+      # 2. PowerShellスクリプト実行
+      - name: Run PowerShell script
+        shell: pwsh
+        run: |
+          .\scripts\GetClusterPublicActiveUserCnt.ps1
 
-      - name: Run script
-        run: bash scripts/get_cluster_active_user_cnt.sh
-
-      - name: Commit and push if changed
+      # 3. git 設定
+      - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # 4. 変更があればコミットしてpush
+      - name: Commit and push changes
+        shell: pwsh
+        run: |
           git add data.json
-          if git diff --cached --quiet; then
-            echo "No changes."
-          else
-            git commit -m "Update data.json ($(date -u +"%Y-%m-%dT%H:%M:%SZ"))"
+          $status = git status --porcelain
+          if ($status) {
+            git commit -m "Update cluster active users [skip ci]"
             git push origin main
-          fi
+          } else {
+            Write-Host "No changes detected, skipping commit."
