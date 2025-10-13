@@ -107,6 +107,7 @@
   <script>
     const { DateTime } = luxon;
     let allData = [];
+    let currentDays = 1; // 現在の表示期間（初期値: 過去24時間）
 
     async function fetchData() {
       try {
@@ -186,14 +187,16 @@
 
     async function loadAndRender(days=null) {
       if (!allData.length) allData = await fetchData();
-      const filtered = filterByDays(allData, days);
+      if (days !== null) currentDays = days; // 現在の表示範囲を記録
+      const filtered = filterByDays(allData, currentDays);
       const { labels, values, count, sorted } = buildDataset(filtered);
       document.getElementById('count').textContent = count;
       document.getElementById('range').textContent = getRangeText(sorted);
       renderChart(labels, values);
     }
 
-    document.getElementById('reload').addEventListener('click', ()=> loadAndRender());
+    // リロードボタン → 現在選択中の期間を再表示
+    document.getElementById('reload').addEventListener('click', ()=> loadAndRender(currentDays));
 
     const btns = {
       90: document.getElementById('btn-90'),
@@ -210,7 +213,9 @@
       });
     });
 
-    loadAndRender();
+    // 初期表示: 過去24時間
+    loadAndRender(1);
+    document.getElementById('btn-1').classList.add('active');
   </script>
 </body>
 </html>
