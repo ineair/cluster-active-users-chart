@@ -36,7 +36,7 @@ try {
     $eventIds = $response.events.summary.id
     foreach ($eventId in $eventIds) {
         $eventDetail = Invoke-RestMethod -Uri ($url3 + $eventId) -Method GET -Headers $headers
-        $eventUserCnt += $eventDetail.liveEntry.users.Count
+        $eventUserCnt += ($eventDetail.liveEntry.users.Count + 1)
     }
 
     $userCnt = $spaceUserCnt + $eventUserCnt
